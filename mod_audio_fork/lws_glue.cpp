@@ -345,6 +345,16 @@ namespace {
         tech_pvt->responseHandler(session, EVENT_DISCONNECT, jsonString);
         free(jsonString);        
       }
+      else if (0 == type.compare("hangup")) {
+        char* jsonString = jsonData ? cJSON_PrintUnformatted(jsonData) : NULL;
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "(%u) processIncomingMessage - received hangup command\n", tech_pvt->id);
+        tech_pvt->responseHandler(session, EVENT_HANGUP, jsonString);
+        if (jsonString) free(jsonString);
+
+        // terminate the call
+        switch_channel_t *channel = switch_core_session_get_channel(session);
+        switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
+      }
       else if (0 == type.compare("error")) {
         char* jsonString = cJSON_PrintUnformatted(jsonData);
         tech_pvt->responseHandler(session, EVENT_ERROR, jsonString);
