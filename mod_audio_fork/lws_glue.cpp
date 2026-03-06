@@ -398,20 +398,26 @@ namespace {
               // first thing: we can no longer access the AudioPipe
               std::stringstream json;
               json << "{\"reason\":\"" << message << "\"}";
+              if (tech_pvt->mutex) switch_mutex_lock(tech_pvt->mutex);
               tech_pvt->pAudioPipe = nullptr;
+              if (tech_pvt->mutex) switch_mutex_unlock(tech_pvt->mutex);
               tech_pvt->responseHandler(session, EVENT_CONNECT_FAIL, (char *) json.str().c_str());
               switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "connection failed: %s\n", message);
             }
             break;
             case drachtio::AudioPipe::CONNECTION_DROPPED:
               // first thing: we can no longer access the AudioPipe
+              if (tech_pvt->mutex) switch_mutex_lock(tech_pvt->mutex);
               tech_pvt->pAudioPipe = nullptr;
+              if (tech_pvt->mutex) switch_mutex_unlock(tech_pvt->mutex);
               tech_pvt->responseHandler(session, EVENT_DISCONNECT, NULL);
               switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "connection dropped from far end\n");
             break;
             case drachtio::AudioPipe::CONNECTION_CLOSED_GRACEFULLY:
               // first thing: we can no longer access the AudioPipe
+              if (tech_pvt->mutex) switch_mutex_lock(tech_pvt->mutex);
               tech_pvt->pAudioPipe = nullptr;
+              if (tech_pvt->mutex) switch_mutex_unlock(tech_pvt->mutex);
               switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "connection closed gracefully\n");
             break;
             case drachtio::AudioPipe::MESSAGE:
@@ -743,9 +749,8 @@ extern "C" {
     uint32_t id = tech_pvt->id;
 
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) fork_session_cleanup\n", id);
-    drachtio::AudioPipe *pAudioPipe = static_cast<drachtio::AudioPipe *>(tech_pvt->pAudioPipe);
-      
     switch_mutex_lock(tech_pvt->mutex);
+    drachtio::AudioPipe *pAudioPipe = static_cast<drachtio::AudioPipe *>(tech_pvt->pAudioPipe);
 
     // get the bug again, now that we are under lock
     {

@@ -181,10 +181,17 @@ int AudioPipe::lws_callback(struct lws *wsi,
               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE max buffer exceeded, truncating message.\n");
             }
             else {
-              ap->m_recv_buf = (uint8_t*) realloc(ap->m_recv_buf, newlen);
-              if (nullptr != ap->m_recv_buf) {
+              uint8_t* ptr = (uint8_t*) realloc(ap->m_recv_buf, newlen);
+              if (nullptr != ptr) {
+                ap->m_recv_buf = ptr;
                 ap->m_recv_buf_len = newlen;
                 ap->m_recv_buf_ptr = ap->m_recv_buf + write_offset;
+              }
+              else {
+                free(ap->m_recv_buf);
+                ap->m_recv_buf = ap->m_recv_buf_ptr = nullptr;
+                ap->m_recv_buf_len = 0;
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE realloc failed.\n");
               }
             }
           }
