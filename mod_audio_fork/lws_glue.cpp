@@ -197,7 +197,7 @@ namespace {
       }
       return SWITCH_STATUS_SUCCESS;
     }
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Failed to get mutext (temp)\n");
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Failed to get mutex (temp)\n");
 
     return SWITCH_STATUS_SUCCESS;
   }
@@ -355,31 +355,6 @@ namespace {
         tech_pvt->responseHandler(session, EVENT_JSON, jsonString);
         free(jsonString);
       }
-      else if (0 == type.compare("transcription")) {
-        char* jsonString = cJSON_PrintUnformatted(jsonData);
-        tech_pvt->responseHandler(session, EVENT_TRANSCRIPTION, jsonString);
-        free(jsonString);        
-      }
-      else if (0 == type.compare("transfer")) {
-        char* jsonString = cJSON_PrintUnformatted(jsonData);
-        tech_pvt->responseHandler(session, EVENT_TRANSFER, jsonString);
-        free(jsonString);                
-      }
-      else if (0 == type.compare("disconnect")) {
-        char* jsonString = cJSON_PrintUnformatted(jsonData);
-        tech_pvt->responseHandler(session, EVENT_DISCONNECT, jsonString);
-        free(jsonString);        
-      }
-      else if (0 == type.compare("error")) {
-        char* jsonString = cJSON_PrintUnformatted(jsonData);
-        tech_pvt->responseHandler(session, EVENT_ERROR, jsonString);
-        free(jsonString);        
-      }
-      else if (0 == type.compare("json")) {
-        char* jsonString = cJSON_PrintUnformatted(json);
-        tech_pvt->responseHandler(session, EVENT_JSON, jsonString);
-        free(jsonString);
-      }
       else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%u) processIncomingMessage - unsupported msg type %s\n", tech_pvt->id, type.c_str());  
       }
@@ -461,10 +436,13 @@ namespace {
 
     memset(tech_pvt, 0, sizeof(private_t));
   
-    strncpy(tech_pvt->sessionId, switch_core_session_get_uuid(session), MAX_SESSION_ID);
-    strncpy(tech_pvt->host, host, MAX_WS_URL_LEN);
+    strncpy(tech_pvt->sessionId, switch_core_session_get_uuid(session), MAX_SESSION_ID - 1);
+    tech_pvt->sessionId[MAX_SESSION_ID - 1] = '\0';
+    strncpy(tech_pvt->host, host, MAX_WS_URL_LEN - 1);
+    tech_pvt->host[MAX_WS_URL_LEN - 1] = '\0';
     tech_pvt->port = port;
-    strncpy(tech_pvt->path, path, MAX_PATH_LEN);    
+    strncpy(tech_pvt->path, path, MAX_PATH_LEN - 1);
+    tech_pvt->path[MAX_PATH_LEN - 1] = '\0';
     tech_pvt->sampling = desiredSampling;
     tech_pvt->responseHandler = responseHandler;
     tech_pvt->playout = NULL;
@@ -491,7 +469,11 @@ namespace {
     tech_pvt->pVecMarksCleared = nullptr;
 
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
-    if (metadata) strncpy(tech_pvt->initialMetadata, metadata, MAX_METADATA_LEN);
+    tech_pvt->bugname[MAX_BUG_LEN] = '\0';
+    if (metadata) {
+      strncpy(tech_pvt->initialMetadata, metadata, MAX_METADATA_LEN - 1);
+      tech_pvt->initialMetadata[MAX_METADATA_LEN - 1] = '\0';
+    }
     
     size_t buflen = LWS_PRE + (FRAME_SIZE_8000 * desiredSampling / 8000 * channels * 1000 / RTP_PACKETIZATION_PERIOD * nAudioBufferSecs);
 
@@ -780,6 +762,7 @@ extern "C" {
     if (pAudioPipe && text) pAudioPipe->bufferForSending(text);
     if (pAudioPipe) pAudioPipe->close();
 
+    switch_mutex_unlock(tech_pvt->mutex);
     destroy_tech_pvt(tech_pvt);
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "(%u) fork_session_cleanup: connection closed\n", id);
     return SWITCH_STATUS_SUCCESS;
