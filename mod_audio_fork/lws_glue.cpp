@@ -1,3 +1,4 @@
+#include <atomic>
 #include <switch.h>
 #include <switch_json.h>
 #include <string.h>
@@ -37,8 +38,8 @@ namespace {
   static const char* mySubProtocolName = std::getenv("MOD_AUDIO_FORK_SUBPROTOCOL_NAME") ?
     std::getenv("MOD_AUDIO_FORK_SUBPROTOCOL_NAME") : "audio.drachtio.org";
   static unsigned int nServiceThreads = std::max(1, std::min(requestedNumServiceThreads ? ::atoi(requestedNumServiceThreads) : 1, 5));
-  static unsigned int idxCallCount = 0;
-  static uint32_t playCount = 0;
+  static std::atomic<unsigned int> idxCallCount{0};
+  static std::atomic<uint32_t> playCount{0};
 
   static bool markCountExceeded(private_t* tech_pvt) {
     if (nullptr != tech_pvt->pVecMarksInUse) {
@@ -587,7 +588,7 @@ namespace {
       case LLL_WARN: llevel = SWITCH_LOG_WARNING; break;
       case LLL_NOTICE: llevel = SWITCH_LOG_NOTICE; break;
       case LLL_INFO: llevel = SWITCH_LOG_INFO; break;
-      break;
+      default: break;
     }
 	  switch_log_printf(SWITCH_CHANNEL_LOG, llevel, "%s\n", line);
   }
