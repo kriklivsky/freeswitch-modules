@@ -1,7 +1,7 @@
-#include <vector>
 #ifndef __AUDIO_PIPE_HPP__
 #define __AUDIO_PIPE_HPP__
 
+#include <vector>
 #include <string>
 #include <list>
 #include <mutex>
@@ -141,6 +141,7 @@ namespace drachtio {
     size_t m_audio_buffer_write_offset;
     size_t m_audio_buffer_min_freespace;
     std::vector<uint8_t> m_recv_buf;
+    bool m_recv_buf_overflow;
     struct lws_per_vhost_data* m_vhd;
     notifyHandler_t m_callback;
     log_emit_function m_logger;

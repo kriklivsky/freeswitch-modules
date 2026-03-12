@@ -163,12 +163,16 @@ int AudioPipe::lws_callback(struct lws *wsi,
         else {
           if (lws_is_first_fragment(wsi)) {
             ap->m_recv_buf.clear();
+            ap->m_recv_buf_overflow = false;
             ap->m_recv_buf.reserve(len + lws_remaining_packet_payload(wsi));
           }
 
-          if (ap->m_recv_buf.size() + len > MAX_RECV_BUF_SIZE) {
+          if (ap->m_recv_buf_overflow) {
+            // discard remaining fragments of an oversized message
+          } else if (ap->m_recv_buf.size() + len > MAX_RECV_BUF_SIZE) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE max buffer exceeded, truncating message.\n");
             ap->m_recv_buf.clear();
+            ap->m_recv_buf_overflow = true;
           } else {
             if (len > 0) {
               ap->m_recv_buf.insert(ap->m_recv_buf.end(), (uint8_t*)in, ((uint8_t*)in) + len);
@@ -464,7 +468,7 @@ AudioPipe::AudioPipe(const char* uuid, const char* host, unsigned int port, cons
   m_uuid(uuid), m_host(host), m_port(port), m_path(path), m_sslFlags(sslFlags),
   m_audio_buffer_min_freespace(minFreespace), m_audio_buffer_max_len(bufLen), m_gracefulShutdown(false),
   m_audio_buffer_write_offset(LWS_PRE), m_bugname(bugname),
-  m_state(LWS_CLIENT_IDLE), m_wsi(nullptr), m_vhd(nullptr), m_callback(callback) {
+  m_state(LWS_CLIENT_IDLE), m_wsi(nullptr), m_vhd(nullptr), m_recv_buf_overflow(false), m_callback(callback) {
 
   if (username && password) {
     m_username.assign(username);
@@ -481,7 +485,7 @@ void AudioPipe::connect(void) {
 }
 
 bool AudioPipe::connect_client(struct lws_per_vhost_data *vhd) {
-  assert(m_audio_buffer != nullptr);
+  assert(!m_audio_buffer.empty());
   assert(m_vhd == nullptr);
 
   struct lws_client_connect_info i;

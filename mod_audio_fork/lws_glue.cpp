@@ -411,7 +411,7 @@ namespace {
             {
               // first thing: we can no longer access the AudioPipe
               std::stringstream json;
-              json << "{\"reason\":\"" << message << "\"}";
+              json << "{\"reason\":\"" << (message ? message : "connection failed") << "\"}";
               if (tech_pvt->mutex) switch_mutex_lock(tech_pvt->mutex);
               tech_pvt->pAudioPipe = nullptr;
               if (tech_pvt->mutex) switch_mutex_unlock(tech_pvt->mutex);
@@ -498,6 +498,10 @@ namespace {
       tech_pvt->streamingPreBuffer = (void *) new CircularBuffer_t(8192);
     } catch (const std::exception& e) {
       switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Exception allocating CircularBuffer: %s\n", e.what());
+      if (tech_pvt->streamingPlayoutBuffer) {
+        delete static_cast<CircularBuffer_t*>(tech_pvt->streamingPlayoutBuffer);
+        tech_pvt->streamingPlayoutBuffer = nullptr;
+      }
       return SWITCH_STATUS_FALSE;
     }
 
