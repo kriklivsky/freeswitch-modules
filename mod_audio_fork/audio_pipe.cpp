@@ -290,7 +290,11 @@ void AudioPipe::processPendingConnects(lws_per_vhost_data *vhd) {
   }
   for (auto it = connects.begin(); it != connects.end(); ++it) {
     AudioPipe* ap = *it;
-    ap->connect_client(vhd);   
+    if (!ap->connect_client(vhd)) {
+      switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s Failed connecting, deleting AudioPipe\n", ap->m_uuid.c_str());
+      ap->m_callback(ap->m_uuid.c_str(), ap->m_bugname.c_str(), AudioPipe::CONNECT_FAIL, NULL, NULL, 0);
+      delete ap;
+    }
   }
 }
 
