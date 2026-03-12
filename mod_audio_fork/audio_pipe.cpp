@@ -162,53 +162,24 @@ int AudioPipe::lws_callback(struct lws *wsi,
         }
         else {
           if (lws_is_first_fragment(wsi)) {
-            // allocate a buffer for the entire chunk of memory needed
-            assert(nullptr == ap->m_recv_buf);
-            ap->m_recv_buf_len = len + lws_remaining_packet_payload(wsi);
-            ap->m_recv_buf = (uint8_t*) malloc(ap->m_recv_buf_len);
-            ap->m_recv_buf_ptr = ap->m_recv_buf;
+            ap->m_recv_buf.clear();
+            ap->m_recv_buf.reserve(len + lws_remaining_packet_payload(wsi));
           }
 
-          size_t write_offset = ap->m_recv_buf_ptr - ap->m_recv_buf;
-          size_t remaining_space = ap->m_recv_buf_len - write_offset;
-          if (remaining_space < len) {
-            //switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE buffer realloc needed.\n");
-            size_t newlen = ap->m_recv_buf_len + RECV_BUF_REALLOC_SIZE;
-            if (newlen > MAX_RECV_BUF_SIZE) {
-              free(ap->m_recv_buf);
-              ap->m_recv_buf = ap->m_recv_buf_ptr = nullptr;
-              ap->m_recv_buf_len = 0;
-              switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE max buffer exceeded, truncating message.\n");
-            }
-            else {
-              uint8_t* ptr = (uint8_t*) realloc(ap->m_recv_buf, newlen);
-              if (nullptr != ptr) {
-                ap->m_recv_buf = ptr;
-                ap->m_recv_buf_len = newlen;
-                ap->m_recv_buf_ptr = ap->m_recv_buf + write_offset;
-              }
-              else {
-                free(ap->m_recv_buf);
-                ap->m_recv_buf = ap->m_recv_buf_ptr = nullptr;
-                ap->m_recv_buf_len = 0;
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE realloc failed.\n");
-              }
-            }
-          }
-
-          if (nullptr != ap->m_recv_buf) {
+          if (ap->m_recv_buf.size() + len > MAX_RECV_BUF_SIZE) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_RECEIVE max buffer exceeded, truncating message.\n");
+            ap->m_recv_buf.clear();
+          } else {
             if (len > 0) {
-              memcpy(ap->m_recv_buf_ptr, in, len);
-              ap->m_recv_buf_ptr += len;
+              ap->m_recv_buf.insert(ap->m_recv_buf.end(), (uint8_t*)in, ((uint8_t*)in) + len);
             }
+
             if (lws_is_final_fragment(wsi)) {
-              if (nullptr != ap->m_recv_buf) {
-                std::string msg((char *)ap->m_recv_buf, ap->m_recv_buf_ptr - ap->m_recv_buf);
+              if (!ap->m_recv_buf.empty()) {
+                std::string msg((char *)ap->m_recv_buf.data(), ap->m_recv_buf.size());
                 ap->m_callback(ap->m_uuid.c_str(), ap->m_bugname.c_str(), AudioPipe::MESSAGE, msg.c_str(), NULL, len);
-                if (nullptr != ap->m_recv_buf) free(ap->m_recv_buf);
               }
-              ap->m_recv_buf = ap->m_recv_buf_ptr = nullptr;
-              ap->m_recv_buf_len = 0;
+              ap->m_recv_buf.clear();
             }
           }
         }
@@ -227,7 +198,7 @@ int AudioPipe::lws_callback(struct lws *wsi,
         if (ap->isGracefulShutdown()) {
           switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"%s graceful shutdown - sending zero length binary frame to flush any final responses\n", ap->m_uuid.c_str());
           std::lock_guard<std::mutex> lk(ap->m_audio_mutex);
-          lws_write(wsi, (unsigned char *) ap->m_audio_buffer + LWS_PRE, 0, LWS_WRITE_BINARY);
+          lws_write(wsi, (unsigned char *) ap->m_audio_buffer.data() + LWS_PRE, 0, LWS_WRITE_BINARY);
           return 0;
         }
 
@@ -263,7 +234,7 @@ int AudioPipe::lws_callback(struct lws *wsi,
           std::lock_guard<std::mutex> lk(ap->m_audio_mutex);
           if (ap->m_audio_buffer_write_offset > LWS_PRE) {
             size_t datalen = ap->m_audio_buffer_write_offset - LWS_PRE;
-            int sent = lws_write(wsi, (unsigned char *) ap->m_audio_buffer + LWS_PRE, datalen, LWS_WRITE_BINARY);
+            int sent = lws_write(wsi, (unsigned char *) ap->m_audio_buffer.data() + LWS_PRE, datalen, LWS_WRITE_BINARY);
             if (sent < datalen) {
               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_WRITEABLE %s attemped to send %lu only sent %d wsi %p..\n", 
                 ap->m_uuid.c_str(), datalen, sent, wsi); 
@@ -488,7 +459,7 @@ AudioPipe::AudioPipe(const char* uuid, const char* host, unsigned int port, cons
   int bidirectional_audio_stream, notifyHandler_t callback) :
   m_uuid(uuid), m_host(host), m_port(port), m_path(path), m_sslFlags(sslFlags),
   m_audio_buffer_min_freespace(minFreespace), m_audio_buffer_max_len(bufLen), m_gracefulShutdown(false),
-  m_audio_buffer_write_offset(LWS_PRE), m_recv_buf(nullptr), m_recv_buf_ptr(nullptr), m_bugname(bugname),
+  m_audio_buffer_write_offset(LWS_PRE), m_bugname(bugname),
   m_state(LWS_CLIENT_IDLE), m_wsi(nullptr), m_vhd(nullptr), m_callback(callback) {
 
   if (username && password) {
@@ -496,11 +467,9 @@ AudioPipe::AudioPipe(const char* uuid, const char* host, unsigned int port, cons
     m_password.assign(password);
   }
   m_bidirectional_audio_stream = bidirectional_audio_stream;
-  m_audio_buffer = new uint8_t[m_audio_buffer_max_len];
+  m_audio_buffer.resize(m_audio_buffer_max_len);
 }
 AudioPipe::~AudioPipe() {
-  if (m_audio_buffer) delete [] m_audio_buffer;
-  if (m_recv_buf) free(m_recv_buf);
 }
 
 void AudioPipe::connect(void) {

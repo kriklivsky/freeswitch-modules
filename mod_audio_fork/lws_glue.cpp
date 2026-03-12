@@ -309,9 +309,22 @@ namespace {
             }
             else {
               if (nullptr == tech_pvt->pVecMarksInInventory) {
-                tech_pvt->pVecMarksInInventory = static_cast<void *>(new std::deque<std::string>());
-                tech_pvt->pVecMarksInUse = static_cast<void *>(new std::deque<std::string>());
-                tech_pvt->pVecMarksCleared = static_cast<void *>(new std::deque<std::string>());
+                try {
+                  tech_pvt->pVecMarksInInventory = static_cast<void *>(new std::deque<std::string>());
+                  tech_pvt->pVecMarksInUse = static_cast<void *>(new std::deque<std::string>());
+                  tech_pvt->pVecMarksCleared = static_cast<void *>(new std::deque<std::string>());
+                } catch (const std::exception& e) {
+                  switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Exception allocating deques: %s\n", e.what());
+                  if (tech_pvt->pVecMarksInInventory) {
+                    delete static_cast<std::deque<std::string>*>(tech_pvt->pVecMarksInInventory);
+                    tech_pvt->pVecMarksInInventory = nullptr;
+                  }
+                  if (tech_pvt->pVecMarksInUse) {
+                    delete static_cast<std::deque<std::string>*>(tech_pvt->pVecMarksInUse);
+                    tech_pvt->pVecMarksInUse = nullptr;
+                  }
+                  continue;
+                }
               }
               std::deque<std::string>* pVec = static_cast<std::deque<std::string>*>(tech_pvt->pVecMarksInInventory);
               pVec->push_back(name->valuestring);
@@ -468,19 +481,26 @@ namespace {
     tech_pvt->buffer_overrun_notified = 0;
     tech_pvt->audio_paused = 0;
     tech_pvt->graceful_shutdown = 0;
-    tech_pvt->streamingPlayoutBuffer = (void *) new CircularBuffer_t(8192);
-    tech_pvt->bidirectional_audio_enable = bidirectional_audio_enable;
-    tech_pvt->bidirectional_audio_stream = bidirectional_audio_stream;
-    tech_pvt->bidirectional_audio_sample_rate = bidirectional_audio_sample_rate;
-    tech_pvt->clear_bidirectional_audio_buffer = false;
-    tech_pvt->has_set_aside_byte = 0;
-    tech_pvt->downscale_factor = 1;
-    if (bidirectional_audio_sample_rate > sampling) {
-      tech_pvt->downscale_factor = bidirectional_audio_sample_rate / sampling;
-      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "downscale_factor is %d\n", tech_pvt->downscale_factor);
+    
+    try {
+      tech_pvt->streamingPlayoutBuffer = (void *) new CircularBuffer_t(8192);
+      tech_pvt->bidirectional_audio_enable = bidirectional_audio_enable;
+      tech_pvt->bidirectional_audio_stream = bidirectional_audio_stream;
+      tech_pvt->bidirectional_audio_sample_rate = bidirectional_audio_sample_rate;
+      tech_pvt->clear_bidirectional_audio_buffer = false;
+      tech_pvt->has_set_aside_byte = 0;
+      tech_pvt->downscale_factor = 1;
+      if (bidirectional_audio_sample_rate > sampling) {
+        tech_pvt->downscale_factor = bidirectional_audio_sample_rate / sampling;
+        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "downscale_factor is %d\n", tech_pvt->downscale_factor);
+      }
+      tech_pvt->streamingPreBufSize = 320 * tech_pvt->downscale_factor * 4; // min 80ms prebuffer
+      tech_pvt->streamingPreBuffer = (void *) new CircularBuffer_t(8192);
+    } catch (const std::exception& e) {
+      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Exception allocating CircularBuffer: %s\n", e.what());
+      return SWITCH_STATUS_FALSE;
     }
-    tech_pvt->streamingPreBufSize = 320 * tech_pvt->downscale_factor * 4; // min 80ms prebuffer
-    tech_pvt->streamingPreBuffer = (void *) new CircularBuffer_t(8192);
+
     tech_pvt->pVecMarksInInventory = nullptr;
     tech_pvt->pVecMarksInUse = nullptr;
     tech_pvt->pVecMarksCleared = nullptr;
@@ -494,8 +514,14 @@ namespace {
     
     size_t buflen = LWS_PRE + (FRAME_SIZE_8000 * desiredSampling / 8000 * channels * 1000 / RTP_PACKETIZATION_PERIOD * nAudioBufferSecs);
 
-    drachtio::AudioPipe* ap = new drachtio::AudioPipe(tech_pvt->sessionId, host, port, path, sslFlags, 
-      buflen, read_impl.decoded_bytes_per_packet, username, password, bugname, bidirectional_audio_stream_enable, eventCallback);
+    drachtio::AudioPipe* ap = nullptr;
+    try {
+      ap = new drachtio::AudioPipe(tech_pvt->sessionId, host, port, path, sslFlags, 
+        buflen, read_impl.decoded_bytes_per_packet, username, password, bugname, bidirectional_audio_stream_enable, eventCallback);
+    } catch (const std::exception& e) {
+      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Exception allocating AudioPipe: %s\n", e.what());
+      return SWITCH_STATUS_FALSE;
+    }
     if (!ap) {
       switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error allocating AudioPipe\n");
       return SWITCH_STATUS_FALSE;

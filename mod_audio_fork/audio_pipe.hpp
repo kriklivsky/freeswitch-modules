@@ -1,3 +1,4 @@
+#include <vector>
 #ifndef __AUDIO_PIPE_HPP__
 #define __AUDIO_PIPE_HPP__
 
@@ -59,7 +60,7 @@ namespace drachtio {
       return m_audio_buffer_min_freespace;
     }
     char * binaryWritePtr(void) { 
-      return (char *) m_audio_buffer + m_audio_buffer_write_offset;
+      return (char *) m_audio_buffer.data() + m_audio_buffer_write_offset;
     }
     void binaryWritePtrAdd(size_t len) {
       m_audio_buffer_write_offset += len;
@@ -135,13 +136,11 @@ namespace drachtio {
     std::mutex m_audio_mutex;
     int m_sslFlags;
     struct lws *m_wsi;
-    uint8_t *m_audio_buffer;
+    std::vector<uint8_t> m_audio_buffer;
     size_t m_audio_buffer_max_len;
     size_t m_audio_buffer_write_offset;
     size_t m_audio_buffer_min_freespace;
-    uint8_t* m_recv_buf;
-    uint8_t* m_recv_buf_ptr;
-    size_t m_recv_buf_len;
+    std::vector<uint8_t> m_recv_buf;
     struct lws_per_vhost_data* m_vhd;
     notifyHandler_t m_callback;
     log_emit_function m_logger;
