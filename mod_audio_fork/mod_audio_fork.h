@@ -70,6 +70,15 @@ struct private_data {
 	int bidirectional_audio_stream;
   int bidirectional_audio_sample_rate;
   int clear_bidirectional_audio_buffer;
+
+  // WebSocket codec: "pcm" (default), "opus" (PCM→OPUS transcode)
+  char ws_codec[32];
+  void *opus_encoder;
+  void *opus_decoder;
+
+  // OPUS encode accumulation buffer (collects PCM until 960 samples for opus_encode)
+  int16_t opus_encode_buf[960];
+  int opus_encode_buf_len;  // samples accumulated so far
 };
 
 typedef struct private_data private_t;

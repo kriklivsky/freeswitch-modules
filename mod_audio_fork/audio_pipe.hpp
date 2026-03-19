@@ -91,6 +91,9 @@ namespace drachtio {
 
     void close() ;
 
+    // queue an individual binary packet (e.g. OPUS frame) to be sent as a separate WS binary message
+    void queueBinaryPacket(const uint8_t* data, size_t len);
+
     // no default constructor or copying
     AudioPipe() = delete;
     AudioPipe(const AudioPipe&) = delete;
@@ -149,6 +152,7 @@ namespace drachtio {
     std::string m_password;
     bool m_gracefulShutdown;
     bool m_bidirectional_audio_stream;
+    std::queue<std::vector<uint8_t>> m_binary_packet_queue;
   };
 
 } // namespace drachtio
