@@ -323,7 +323,8 @@ namespace {
                     delete static_cast<std::deque<std::string>*>(tech_pvt->pVecMarksInUse);
                     tech_pvt->pVecMarksInUse = nullptr;
                   }
-                  continue;
+                  cJSON_Delete(json);
+                  return;
                 }
               }
               std::deque<std::string>* pVec = static_cast<std::deque<std::string>*>(tech_pvt->pVecMarksInInventory);
